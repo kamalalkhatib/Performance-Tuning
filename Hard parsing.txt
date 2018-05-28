@@ -1,0 +1,71 @@
+The system is slow, and after running statspack and checking statistics, 
+they show high hard parsing.
+Hard prsing can create serious performance problems because it is resource intensive.
+the following statistics in the statspack show the hard parsing issue:
+
+Load Profile              Per Second    Per Transaction    Per Exec    Per Call
+~~~~~~~~~~~~      ------------------  ----------------- ----------- -----------
+Parses:                    140.8            1,736.0
+Hard parses:               45.7              563.3
+
+These stattistics show Soft Parse is 67.55, that means the hard parse is the rest,
+which is 33.45%, which is high. 
+Instance Efficiency Indicators
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            Buffer Nowait %:  100.00       Redo NoWait %:  100.00
+            Buffer  Hit   %:   98.37  Optimal W/A Exec %:  100.00
+            Library Hit   %:   72.80        Soft Parse %:   67.55
+         Execute to Parse %:   67.64         Latch Hit %:  100.00
+Parse CPU to Parse Elapsd %:   58.06     % Non-Parse CPU:   52.13
+
+Also Time Model shows that parse time elapsed 69.7 and hard parse elapsed time
+was 63.7 which means the most time of parse time elapsed was hard parsing.
+Time Model System Stats  DB/Inst: NCSCM/ncscm  Snaps: 21-31
+-> Ordered by % of DB time desc, Statistic name
+
+Statistic                                       Time (s) % DB time
+----------------------------------- -------------------- ---------
+parse time elapsed                                   2.8      69.7
+hard parse elapsed time                              2.5      63.7
+
+To find SQL with excessive hard parses you need to look for SQL statements that have only executed once,
+SQL> select sql_text from v$sql
+     where
+     executions=1;
+SQL_TEXT
+--------------------------------------------------------------------------------
+select * from shops where sh_id=992
+select * from shops where sh_id=995
+select * from shops where sh_id=985
+select * from shops where sh_id=986
+select * from shops where sh_id=999
+select * from shops where sh_id=983
+select * from shops where sh_id=991
+select * from shops where sh_id=996
+select * from shops where sh_id=997
+select * from shops where sh_id=998
+select * from shops where sh_id=989
+
+SQL_TEXT
+--------------------------------------------------------------------------------
+select * from shops where sh_id=988
+select * from shops where sh_id=987
+select * from shops where sh_id=984
+select * from shops where sh_id=990
+select * from shops where sh_id=994
+select * from shops where sh_id=1000
+select * from shops where sh_id=993
+select * from shops where sh_id=982
+
+19 rows selected.
+After finding the query that causes the most hard parsing, we find 
+The query uses literals, to solve this issue we need to do one of the follwoing:
+1- We need to use PLSQL because always caches cursors for us.
+2- we need to use Bind Variables
+which enable Oracle DB to take advantage of cursor sharing, and share the plan which helps to avoid
+the overhead of latching the shared pool and library cache required for hard parsing.
+This is an example of using bind variables insted of literals:
+SQL>VARIABLE shop_id NUMBER
+SQL>EXEC :shop_id:= 982
+SQL>select * from shops where sh_id=:shop_id;
+In this way we can reduce the hard parsing.
