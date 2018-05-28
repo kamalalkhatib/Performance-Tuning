@@ -1,5 +1,5 @@
 We have a slow query, after using tracefile to check the execution plan and statistics, 
-We found the optimizer does not use the index on the object_name.
+We found the optimizer is not using the index on the object_name.
 this is the example:
 SQL>create index object_name on objects(object_name);
 
