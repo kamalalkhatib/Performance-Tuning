@@ -1,0 +1,170 @@
+- After two different sessions issue the following update statements,
+ SQL> update emp set deptno=20
+  2  where empno=7934;
+
+ 1 row updated.
+
+ SQL> update emp set deptno=30
+   2  where empno=7934;
+
+ - There was a complaining that the database is slow, Now we need to check the session's state
+   to ascertain what database session is doing now.
+
+We use this query for displaying sessions, session state, and wait details
+SQL>select sid,
+        decode(state, 'WAITING','Waiting',
+                'Working') state,
+        decode(state,
+                'WAITING',
+                'So far '||seconds_in_wait,
+                'Last waited '||
+                wait_time/100)||
+        ' secs for '||event
+        "Description"
+from v$session
+where username = 'SCOTT';
+
+      SID STATE
+---------- -------
+Description
+--------------------------------------------------------------------------------
+	69 Waiting
+So far 188 secs for SQL*Net message from client
+
+	70 Waiting
+So far 130 secs for enq: TX - row lock contention
+
+ Session 70 (in the SID column) indicates that it is waiting for an event: “enq: TX – row lock contention”—short for
+ “enqueue for transaction-level lock on row” or, in plain English, a row-level lock. 
+
+WE need to find out the blocking session:
+SQL>select 
+  blocking_session B_SID,
+  blocking_instance B_Inst
+from v$session
+where sid =70;
+     B_SID     B_INST
+---------- ----------
+	69	    1
+The output shows clearly that SID 69 is holding the lock that SID 70 is waiting for.
+
+You can find the specific row that is locked by first finding the table containing that row. 
+To find that table, use the same V$SESSION view; in this case, the information is in the ROW_WAIT_OBJ# column,
+which shows the object number of the table whose row is being locked. You can then get the name of the table from the DBA_OBJECTS view, 
+using this object number, as shown in the following query:
+SQL> select row_wait_obj#,
+       row_wait_file#,
+       row_wait_block#,
+       row_wait_row#
+from v$session 
+where sid =70;
+
+ROW_WAIT_OBJ# ROW_WAIT_FILE# ROW_WAIT_BLOCK# ROW_WAIT_ROW#
+------------- -------------- --------------- -------------
+	93213		   6		 197		13
+
+To get the object information:
+QL> select owner, object_type, object_name, data_object_id
+from dba_objects
+where object_id = 93213;
+
+OWNER
+--------------------------------------------------------------------------------
+OBJECT_TYPE
+-----------------------
+OBJECT_NAME
+--------------------------------------------------------------------------------
+DATA_OBJECT_ID
+--------------
+SCOTT
+TABLE
+EMP
+	 93213
+
+ We can use the following query to get other details, such as the client machine the session is connecting from, 
+the user (of both the database and the operating system), and the service name.
+
+SQL> select SID, osuser, machine, terminal, service_name, 
+       logon_time, last_call_et
+from v$session
+where username = 'SCOTT';
+
+       SID OSUSER
+---------- ------------------------------
+MACHINE
+----------------------------------------------------------------
+TERMINAL
+------------------------------
+SERVICE_NAME							 LOGON_TIM
+---------------------------------------------------------------- ---------
+LAST_CALL_ET
+------------
+	69 oracle
+localhost.localdomain
+pts/1
+
+       SID OSUSER
+---------- ------------------------------
+MACHINE
+----------------------------------------------------------------
+TERMINAL
+------------------------------
+SERVICE_NAME							 LOGON_TIM
+---------------------------------------------------------------- ---------
+LAST_CALL_ET
+------------
+SYS$USERS							 25-MAY-18
+	1575
+
+
+       SID OSUSER
+---------- ------------------------------
+MACHINE
+----------------------------------------------------------------
+TERMINAL
+------------------------------
+SERVICE_NAME							 LOGON_TIM
+---------------------------------------------------------------- ---------
+LAST_CALL_ET
+------------
+	70 oracle
+localhost.localdomain
+pts/2
+
+       SID OSUSER
+---------- ------------------------------
+MACHINE
+----------------------------------------------------------------
+TERMINAL
+------------------------------
+SERVICE_NAME							 LOGON_TIM
+---------------------------------------------------------------- ---------
+LAST_CALL_ET
+------------
+SYS$USERS							 25-MAY-18
+	1517
+
+We can get the SQL statement a session is executing,
+SQL> select sql_id
+from v$session
+where sid =70;
+
+SQL_ID
+-------------
+6u7s22f77t0k2
+
+SQL> set long 99999
+select sql_fulltext
+from v$sql
+where sql_id ='6u7s22f77t0k2';
+
+SQL_FULLTEXT
+--------------------------------------------------------------------------------
+update emp set deptno=30
+where empno=7934
+
+ After identifying the session holding the lock we could do one of the following options:
+ 1- We may want to wait until it commits or rolls back the transaction. 
+ Either action releases the lock.
+ 2- In the case of a dead connection, we may alternatively decide to kill the session
+ 3- send a reminder to rectify that situation immediately.
