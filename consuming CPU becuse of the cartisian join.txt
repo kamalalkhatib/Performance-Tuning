@@ -1,0 +1,61 @@
+There is a process consumes the CPU, the TOP command shows the process ID, which is 7416.
+We need this process id to find the required info about the session that is consuming the CPU
+SQL>select a.username,a.osuser,a.program,b.spid,
+a.sid,a.serial# from
+v$session a, v$process b where
+b.spid=7416
+and
+a.paddr=b.addr
+/
+
+USERNAME   OSUSER			  PROGRAM				SPID
+---------- ------------------------------ --------------------------------------------- ----------
+       SID    SERIAL#
+---------- ----------
+SCOTT	   oracle			  sqlplus@localhost.localdomain (TNS V1-V3)	7416
+	38	 4021
+
+We use the SID to find what SQL statemnet is running and consuming the CPU resources,
+SQL>select sesion.sid,
+       sesion.username,
+       optimizer_mode,
+       hash_value,
+       address,
+       cpu_time,
+       elapsed_time,
+       sql_text
+  from v$sqlarea sqlarea, v$session sesion
+ where sid=38
+ and
+   sesion.sql_hash_value = sqlarea.hash_value
+   and sesion.sql_address    = sqlarea.address
+   and sesion.username is not null
+
+       SID USERNAME			  OPTIMIZER_ HASH_VALUE ADDRESS
+---------- ------------------------------ ---------- ---------- ----------------
+  CPU_TIME ELAPSED_TIME
+---------- ------------
+SQL_TEXT
+--------------------------------------------------------------------------------
+	38 SCOTT			  ALL_ROWS    390502960 00000000758F0F28
+    589110	2644750
+select * from address, shops
+
+The result shows that a user made a cartisian join which is the reason why this session is consuming high CPU.
+ To kill this session:
+  SQL>select a.sid,a.serial# from
+      v$session a, v$process b where
+      b.spid=7416
+      and
+      a.paddr=b.addr
+SQL> /
+
+       SID    SERIAL#
+---------- ----------
+	38	 4021
+
+
+SQL> alter system kill session'38,4021';
+
+System altered.
+
