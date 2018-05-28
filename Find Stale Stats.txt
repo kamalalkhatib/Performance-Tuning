@@ -1,0 +1,69 @@
+How to check if statistics for a table is stale:
+
+SQL> create table objects as select * from all_objects;
+
+Table created.
+
+SQL> select count(*) from objects;
+
+  COUNT(*)
+----------
+     89700
+ 
+SQL> select num_rows,to_char(last_analyzed,'dd/mm/yyyy hh:mi:ss')
+    from dba_tab_statistics
+     where
+     table_name='OBJECTS'
+
+  NUM_ROWS TO_CHAR(LAST_ANALYZ
+---------- -------------------
+     89700 18/05/2018 09:46:14
+
+The number of rows in the data dictionary is the same as the table.  
+
+SQL> insert into objects select * from objects;
+
+89700 rows created.
+
+SQL> /
+
+179400 rows created.
+
+SQL> commit;
+
+Commit complete.
+
+SQL> select count(*) from objects;
+
+  COUNT(*)
+----------
+    358800
+
+
+SQL> select num_rows,to_char(last_analyzed,'dd/mm/yyyy hh:mi:ss')
+    from dba_tab_statistics
+    where
+    table_name='OBJECTS'
+
+  NUM_ROWS TO_CHAR(LAST_ANALYZ
+---------- -------------------
+     89700 18/05/2018 09:46:14
+The number of rows in the data dictionary now is not the same as the table. 
+That means the statistics are stale, and we need to gather them.
+
+SQL> exec dbms_stats.gather_table_stats('SCOTT','OBJECTS');
+
+PL/SQL procedure successfully completed.
+
+SQL> select num_rows,to_char(last_analyzed,'dd/mm/yyyy hh:mi:ss')
+  2  from dba_tab_statistics
+  3  where
+  4  table_name='OBJECTS';
+
+  NUM_ROWS TO_CHAR(LAST_ANALYZ
+---------- -------------------
+    358800 18/05/2018 10:03:20
+The number of rows in the data dictionary now is the same as the table. 
+
+
+
